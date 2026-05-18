@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Checklist Kaart</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+
+<body>
+
+<header>
+  <h1>Checklist Kaart</h1>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-dot" style="background:#E24B4A"></div>
+      <span id="s-niet">0</span> niet gedaan
+    </div>
+    <div class="stat">
+      <div class="stat-dot" style="background:#EF9F27"></div>
+      <span id="s-onmogelijk">0</span> niet mogelijk
+    </div>
+    <div class="stat">
+      <div class="stat-dot" style="background:#639922"></div>
+      <span id="s-gedaan">0</span> gedaan
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <div id="map"></div>
+
+  <div id="panel">
+    <div class="panel-header">
+      <h2 id="panel-title">Punt</h2>
+      <button id="close-btn" aria-label="Sluit">×</button>
+    </div>
+
+    <div class="panel-body">
+
+      <div>
+        <div class="section-label">Status</div>
+        <select id="status-select">
+          <option value="niet_gedaan">Niet gedaan</option>
+          <option value="niet_mogelijk">Niet mogelijk</option>
+          <option value="Trombone">Trombone</option>
+          <option value="Trompet">Trompet</option>
+          <option value="Saxofoon">Saxofoon</option>
+          <option value="Ritme">Ritme</option>
+        </select>
+      </div>
+
+      <div>
+        <div class="section-label">Opmerking</div>
+        <textarea id="comment-area" placeholder="Voeg een toelichting toe..."></textarea>
+      </div>
+
+      <div>
+        <div class="section-label">Kenmerken</div>
+        <div class="attrs" id="attrs-list"></div>
+      </div>
+
+      <button id="save-btn">Opslaan</button>
+
+    </div>
+  </div>
+</div>
+
+<div id="toast">Opgeslagen ✓</div>
+<div id="loading">Laag laden...</div>
+
+<script>
+const FEATURE_LAYER_URL =
+  "https://services.arcgis.com/JmSyAMvJJkgxqun6/arcgis/rest/services/PostersUU/FeatureServer/0";
+
+const KLEUREN = {
+  niet_gedaan: "#E24B4A",
+  niet_mogelijk: "#EF9F27",
+  Trombone: "#639922",
+  Trompet: "#639922",
+  Saxofoon: "#639922",
+  Ritme: "#639922"
+};
+
+function getKleur(status) {
+  return KLEUREN[status] || "#E24B4A";
+}
+
+const map = L.map("map");
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap",
+  maxZoom: 19
+}).addTo(map);
+
+const state = {};
+const markers = {};
+let huidigId = null;
+let features = [];
+
+function maakIcon(status) {
+  const kleur = getKleur(status);
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:18px;height:18px;background:${kleur};border:2.5px solid #fff;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,0.35);cursor:pointer"></div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9]
+  });
+}
+
+function openPanel(id) {
+  huidigId = id;
+  const feat = features.find(f => f._id === id);
+  const s = state[id];
+
+  const props = feat.properties || {};
+  const naamVeld = Object.keys(props).find(k =>
+    ["naam", "name", "omschrijving", "label", "id", "objectid"].includes(k.toLowerCase())
+  );
+
+  document.getElementById("panel-title").textContent =
+    naamVeld ? props[naamVeld] : `Punt ${id + 1}`;
+
+  const attrsHtml = Object.entries(props)
+    .filter(([k]) => !["status","opmerking","objectid","globalid"].includes(k.toLowerCase()))
+    .map(([k, v]) => `<b>${k}:</b> ${v ?? "—"}`)
+    .join("<br>");
+
+  document.getElementById("attrs-list").innerHTML =
+    attrsHtml || "Geen attributen";
+
+  document.getElementById("status-select").value = s.status;
+  document.getElementById("comment-area").value = s.comment;
+  document.getElementById("panel").classList.add("open");
+}
+
+function updateStats() {
+  let n = 0, o = 0, g = 0;
+
+  Object.values(state).forEach(s => {
+    if (s.status === "niet_gedaan") n++;
+    else if (s.status === "niet_mogelijk") o++;
+    else g++;
+  });
+
+  document.getElementById("s-niet").textContent = n;
+  document.getElementById("s-onmogelijk").textContent = o;
+  document.getElementById("s-gedaan").textContent = g;
+}
+
+function showToast(tekst, kleur) {
+  const t = document.getElementById("toast");
+  t.textContent = tekst;
+  t.style.background = kleur || "#3B6D11";
+  t.style.opacity = 1;
+  setTimeout(() => t.style.opacity = 0, 2000);
+}
+
+document.getElementById("save-btn").addEventListener("click", () => {
+  if (huidigId === null) return;
+
+  const id = huidigId;
+  const feat = features.find(f => f._id === id);
+
+  state[id].status = document.getElementById("status-select").value;
+  state[id].comment = document.getElementById("comment-area").value;
+
+  const objectId = feat.properties.FID;
+
+  const updateBody = new URLSearchParams({
+    f: "json",
+    updates: JSON.stringify([{
+      attributes: {
+        FID: objectId,
+        status: state[id].status,
+        opmerking: state[id].comment
+      }
+    }])
+  });
+
+  console.log("URL:", `${FEATURE_LAYER_URL}/applyEdits`);
+  console.log("Body:", updateBody.toString());
+
+  fetch(`${FEATURE_LAYER_URL}/applyEdits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: updateBody
+  })
+  .then(r => r.json())
+  .then(result => {
+    console.log("SERVER RESPONSE:", result);
+
+    if (result.updateResults && result.updateResults[0].success) {
+      markers[id].setIcon(maakIcon(state[id].status));
+      updateStats();
+      showToast("Opgeslagen ✓", "#3B6D11");
+    } else {
+      showToast("Opslaan mislukt ✗", "#A32D2D");
+      console.log(result.error || result);
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    showToast("Verbindingsfout ✗", "#A32D2D");
+  });
+
+  document.getElementById("panel").classList.remove("open");
+  huidigId = null;
+});
+
+document.getElementById("close-btn").addEventListener("click", () => {
+  document.getElementById("panel").classList.remove("open");
+  huidigId = null;
+});
+
+const queryUrl =
+  `${FEATURE_LAYER_URL}/query?where=1%3D1&outFields=*&f=geojson`;
+
+fetch(queryUrl)
+  .then(r => r.json())
+  .then(geojson => {
+    document.getElementById("loading").style.display = "none";
+
+    features = geojson.features.map((f, i) => ({ ...f, _id: i }));
+
+    const bounds = [];
+
+    features.forEach((feat, i) => {
+      const props = feat.properties || {};
+
+      state[i] = {
+        status: props.status || "niet_gedaan",
+        comment: props.opmerking || ""
+      };
+
+      let latlng;
+      const geom = feat.geometry;
+
+      if (geom.type === "Point") {
+        latlng = [geom.coordinates[1], geom.coordinates[0]];
+      } else if (geom.type === "MultiPoint") {
+        latlng = [geom.coordinates[0][1], geom.coordinates[0][0]];
+      } else {
+        const layer = L.geoJSON(feat);
+        latlng = layer.getBounds().getCenter();
+      }
+
+      const marker = L.marker(latlng, {
+        icon: maakIcon(state[i].status)
+      }).addTo(map);
+
+      marker.on("click", () => openPanel(i));
+
+      markers[i] = marker;
+      bounds.push(latlng);
+    });
+
+    if (bounds.length > 0) {
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+
+    updateStats();
+  })
+  .catch(err => {
+    document.getElementById("loading").innerHTML =
+      "⚠️ Kan de laag niet laden.<br>" + err.message;
+  });
+</script>
+
+</body>
+</html>
