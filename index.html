@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Checklist Kaart</title>
+  <title>Posters voor Big Back to the Future</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
@@ -14,14 +14,14 @@
 <body>
 
 <header>
-  <h1>Checklist Kaart</h1>
+  <h1>Waar hangen al Big Back to the Future posters?</h1>
   <div class="stats">
     <div class="stat">
       <div class="stat-dot" style="background:#E24B4A"></div>
       <span id="s-niet">0</span> niet gedaan
     </div>
     <div class="stat">
-      <div class="stat-dot" style="background:#EF9F27"></div>
+      <div class="stat-dot" style="background:#6a6e71"></div>
       <span id="s-onmogelijk">0</span> niet mogelijk
     </div>
     <div class="stat">
@@ -47,10 +47,10 @@
         <select id="status-select">
           <option value="niet_gedaan">Niet gedaan</option>
           <option value="niet_mogelijk">Niet mogelijk</option>
-          <option value="Trombone">Trombone</option>
-          <option value="Trompet">Trompet</option>
-          <option value="Saxofoon">Saxofoon</option>
-          <option value="Ritme">Ritme</option>
+          <option value="Trombone">Trombone 🪊</option>
+          <option value="Trompet">Trompet 🎺</option>
+          <option value="Saxofoon">Saxofoon 🎷</option>
+          <option value="Ritme">Ritme 🥁</option>
         </select>
       </div>
 
@@ -73,13 +73,45 @@
 <div id="toast">Opgeslagen ✓</div>
 <div id="loading">Laag laden...</div>
 
+<div id="leaderboard">
+  <h3>Leaderboard</h3>
+
+  <div class="lb-row" id="lb-trombone-row">
+    <span class="rank">#</span>
+    <span class="name">Trombone</span>
+    <div class="bar"><div class="fill" id="bar-trombone"></div></div>
+    <span class="count" id="lb-trombone">0</span>
+  </div>
+
+  <div class="lb-row" id="lb-trompet-row">
+    <span class="rank">#</span>
+    <span class="name">Trompet</span>
+    <div class="bar"><div class="fill" id="bar-trompet"></div></div>
+    <span class="count" id="lb-trompet">0</span>
+  </div>
+
+  <div class="lb-row" id="lb-saxofoon-row">
+    <span class="rank">#</span>
+    <span class="name">Saxofoon</span>
+    <div class="bar"><div class="fill" id="bar-saxofoon"></div></div>
+    <span class="count" id="lb-saxofoon">0</span>
+  </div>
+
+  <div class="lb-row" id="lb-ritme-row">
+    <span class="rank">#</span>
+    <span class="name">Ritme</span>
+    <div class="bar"><div class="fill" id="bar-ritme"></div></div>
+    <span class="count" id="lb-ritme">0</span>
+  </div>
+</div>
+
 <script>
 const FEATURE_LAYER_URL =
   "https://services.arcgis.com/JmSyAMvJJkgxqun6/arcgis/rest/services/PostersUU/FeatureServer/0";
 
 const KLEUREN = {
   niet_gedaan: "#E24B4A",
-  niet_mogelijk: "#EF9F27",
+  niet_mogelijk: "#6a6e71",
   Trombone: "#639922",
   Trompet: "#639922",
   Saxofoon: "#639922",
@@ -151,6 +183,43 @@ function updateStats() {
   document.getElementById("s-gedaan").textContent = g;
 }
 
+function updateLeaderboard() {
+  const data = {
+    Trombone: 0,
+    Trompet: 0,
+    Saxofoon: 0,
+    Ritme: 0
+  };
+
+  Object.values(state).forEach(s => {
+    if (data[s.status] !== undefined) {
+      data[s.status]++;
+    }
+  });
+
+  const total = Math.max(...Object.values(data), 1);
+
+  const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
+
+  const container = document.getElementById("leaderboard");
+
+  sorted.forEach((item, index) => {
+    const name = item[0];
+    const count = item[1];
+    const percent = (count / total) * 100;
+    const key = name.toLowerCase();
+
+    const row = document.getElementById("lb-" + key + "-row");
+    if (!row) return;
+
+    row.querySelector(".rank").textContent = "#" + (index + 1);
+    row.querySelector(".count").textContent = count;
+    row.querySelector(".fill").style.width = percent + "%";
+
+    container.appendChild(row);
+  });
+}
+
 function showToast(tekst, kleur) {
   const t = document.getElementById("toast");
   t.textContent = tekst;
@@ -181,9 +250,6 @@ document.getElementById("save-btn").addEventListener("click", () => {
     }])
   });
 
-  console.log("URL:", `${FEATURE_LAYER_URL}/applyEdits`);
-  console.log("Body:", updateBody.toString());
-
   fetch(`${FEATURE_LAYER_URL}/applyEdits`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -196,6 +262,7 @@ document.getElementById("save-btn").addEventListener("click", () => {
     if (result.updateResults && result.updateResults[0].success) {
       markers[id].setIcon(maakIcon(state[id].status));
       updateStats();
+      updateLeaderboard();
       showToast("Opgeslagen ✓", "#3B6D11");
     } else {
       showToast("Opslaan mislukt ✗", "#A32D2D");
@@ -263,6 +330,7 @@ fetch(queryUrl)
     }
 
     updateStats();
+    updateLeaderboard();
   })
   .catch(err => {
     document.getElementById("loading").innerHTML =
