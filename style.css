@@ -187,7 +187,7 @@ textarea:focus { outline: none; border-color: #aaa; }
 #style voor leaderbord
 
 #leaderboard {
-  position: fixed;
+  position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
@@ -211,14 +211,14 @@ textarea:focus { outline: none; border-color: #aaa; }
 .lb-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0px;
   flex: 1;
 }
 
 .rank {
   font-size: 12px;
   font-weight: 700;
-  color: #888;
+  color: #57b44a;
   width: 24px;
   flex-shrink: 0;
 }
@@ -241,7 +241,7 @@ textarea:focus { outline: none; border-color: #aaa; }
 
 .fill {
   height: 100%;
-  background: #639922;
+  background: #57b44a;
   border-radius: 4px;
   width: 0%;
   transition: width 0.4s ease;
